@@ -66,6 +66,7 @@ modules.order
 /vmlinux.symvers
 /vmlinux-gdb.py
 /vmlinuz
+/vmlinuz-wsl2-scissors*
 /System.map
 /Module.markers
 /modules.builtin
