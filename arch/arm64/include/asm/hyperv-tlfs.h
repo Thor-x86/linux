@@ -64,6 +64,12 @@
 #define HV_REGISTER_STIMER0_CONFIG	0x000B0000
 #define HV_REGISTER_STIMER0_COUNT	0x000B0001
 
+enum hv_isolation_type {
+	HV_ISOLATION_TYPE_NONE  = 0,
+	HV_ISOLATION_TYPE_VBS   = 1,
+	HV_ISOLATION_TYPE_SNP   = 2
+};
+
 union hv_msi_entry {
 	u64 as_uint64[2];
 	struct {
