@@ -29,10 +29,10 @@ didn't included in the official kernel:
 
 ## How to use custom kernel?
 
-First, go to [releases](releases) page then download
-`vmlinuz-wsl2-scissors-x86_64` file for Intel/AMD processors or
-`vmlinuz-wsl2-scissors-arm64` for ARM processors
-under **WSL2 Scissors Rolling Release** section.
+First, download ready-to-use kernel binary
+
+- [WSL2 Scissors for x86_64](https://raw.githubusercontent.com/Thor-x86/linux/linux-wsl2-scissors/vmlinuz-wsl2-scissors-x86_64)
+- [WSL2 Scissors for ARM64](https://raw.githubusercontent.com/Thor-x86/linux/linux-wsl2-scissors/vmlinuz-wsl2-scissors-arm64)
 
 Then put this into Explorer address bar
 
