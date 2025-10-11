@@ -302,10 +302,11 @@ int dw_pcie_host_init(struct pcie_port *pp)
 	if (cfg_res) {
 		pp->cfg0_size = resource_size(cfg_res);
 		pp->cfg0_base = cfg_res->start;
-
-		pp->va_cfg0_base = devm_pci_remap_cfg_resource(dev, cfg_res);
-		if (IS_ERR(pp->va_cfg0_base))
-			return PTR_ERR(pp->va_cfg0_base);
+		if (!pp->va_cfg0_base) {
+			pp->va_cfg0_base = devm_pci_remap_cfg_resource(dev, cfg_res);
+			if (IS_ERR(pp->va_cfg0_base))
+				return PTR_ERR(pp->va_cfg0_base);
+		}
 	} else {
 		dev_err(dev, "Missing *config* reg space\n");
 		return -ENODEV;
@@ -318,10 +319,15 @@ int dw_pcie_host_init(struct pcie_port *pp)
 			return PTR_ERR(pci->dbi_base);
 	}
 
-	bridge = devm_pci_alloc_host_bridge(dev, 0);
+	bridge = pci_alloc_host_bridge(0);
 	if (!bridge)
 		return -ENOMEM;
 
+	ret = devm_of_pci_bridge_init(dev, bridge);
+	if (ret)
+		return -ENOMEM;
+
+	bridge->dev.parent = dev;
 	pp->bridge = bridge;
 
 	/* Get the I/O range from DT */
@@ -352,6 +358,12 @@ int dw_pcie_host_init(struct pcie_port *pp)
 			if (ret < 0)
 				return ret;
 		} else if (pp->has_msi_ctrl) {
+			u32 ctrl, num_ctrls;
+
+			num_ctrls = pp->num_vectors / MAX_MSI_IRQS_PER_CTRL;
+			for (ctrl = 0; ctrl < num_ctrls; ctrl++)
+				pp->irq_mask[ctrl] = ~0;
+
 			if (!pp->msi_irq) {
 				pp->msi_irq = platform_get_irq_byname_optional(pdev, "msi");
 				if (pp->msi_irq < 0) {
@@ -398,6 +410,9 @@ int dw_pcie_host_init(struct pcie_port *pp)
 		if (ret)
 			goto err_free_msi;
 	}
+
+	dw_pcie_version_detect(pci);
+
 	dw_pcie_iatu_detect(pci);
 
 	dw_pcie_setup_rc(pp);
@@ -432,6 +447,8 @@ EXPORT_SYMBOL_GPL(dw_pcie_host_init);
 void dw_pcie_host_deinit(struct pcie_port *pp)
 {
 	struct dw_pcie *pci = to_dw_pcie_from_pp(pp);
+	struct device *dev = pci->dev;
+	struct resource_entry *win, *tmp;
 
 	pci_stop_root_bus(pp->bridge->bus);
 	pci_remove_root_bus(pp->bridge->bus);
@@ -440,6 +457,21 @@ void dw_pcie_host_deinit(struct pcie_port *pp)
 
 	if (pp->has_msi_ctrl)
 		dw_pcie_free_msi(pp);
+
+	resource_list_for_each_entry_safe(win, tmp, &pp->bridge->windows) {
+		switch (resource_type(win->res)) {
+		case IORESOURCE_IO:
+			pci_unmap_iospace(win->res);
+			devm_release_resource(dev, win->res);
+			break;
+		case IORESOURCE_MEM:
+			devm_release_resource(dev, win->res);
+			break;
+		default:
+			continue;
+		}
+	}
+	pci_free_host_bridge(pp->bridge);
 }
 EXPORT_SYMBOL_GPL(dw_pcie_host_deinit);
 
@@ -550,7 +582,6 @@ void dw_pcie_setup_rc(struct pcie_port *pp)
 
 		/* Initialize IRQ Status array */
 		for (ctrl = 0; ctrl < num_ctrls; ctrl++) {
-			pp->irq_mask[ctrl] = ~0;
 			dw_pcie_writel_dbi(pci, PCIE_MSI_INTR0_MASK +
 					    (ctrl * MSI_REG_CTRL_BLOCK_SIZE),
 					    pp->irq_mask[ctrl]);
